@@ -1,0 +1,133 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.env
+
+# Build & distribution
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+MANIFEST
+pip-wheel-metadata/
+share/python-wheels/
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.coveragerc
+.tox/
+.nox/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyright/
+
+# Linting
+.ruff_cache/
+
+# Generated C++ headers
+# These are outputs — regenerate with ts-parser, don't commit
+include/*.h
+include/*.hpp
+
+# Generated IR JSON
+# Intermediate artefacts — regenerate from .pt files
+generated/*.json
+generated/*.h
+generated/*.hpp
+
+#  PyTorch model files
+# .pt files can be very large; store with Git LFS or externally
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Model weights directory 
+weights/
+!weights/.gitkeep
+
+# C++ build artefacts 
+build/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.o
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.nfs*
+
+# IDEs
+# VSCode
+.vscode/
+*.code-workspace
+
+# JetBrains (PyCharm, CLion, etc.)
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim / Neovim
+*.swp
+*.swo
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+
+# Emacs
+\#*\#
+.\#*
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Secrets & credentials
+.env
+.env.*
+*.pem
+*.key
+secrets.json
+
+# Logs
+*.log
+logs/
