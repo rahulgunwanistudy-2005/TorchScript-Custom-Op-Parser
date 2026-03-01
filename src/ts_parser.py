@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
@@ -19,12 +20,21 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
 logger = logging.getLogger("ts_parser")
 
 
+# Keeps ops-file namespaces alive so Library objects aren't garbage collected.
+_ops_namespaces: List[Dict] = []
+
+
+def _die(msg: str) -> None:
+    logger.error(msg)
+    sys.exit(1)
+
+
 def load_ops_file(ops_path: str | Path) -> None:
     """
     Execute a Python file that registers custom TorchScript operators.
 
-    The file is executed in its own namespace before the model is loaded,
-    so any torch.library registrations it performs are visible to torch.jit.load.
+    The file runs before the model is loaded so any torch.library registrations
+    it performs are visible to torch.jit.load.
 
     Example ops file (mymodel.ops.py):
 
@@ -42,14 +52,8 @@ def load_ops_file(ops_path: str | Path) -> None:
     path = Path(ops_path)
     if not path.exists():
         raise FileNotFoundError(f"Ops file not found: {path}")
-    # runpy keeps the module-level objects alive in the returned dict,
-    # preventing Library objects from being garbage collected mid-session.
-    ns = runpy.run_path(str(path))
-    # Stash the namespace so it stays alive for the duration of the process.
-    load_ops_file._namespaces.append(ns)
+    _ops_namespaces.append(runpy.run_path(str(path)))
     logger.info("Loaded ops file: %s", path)
-
-load_ops_file._namespaces: List[Dict] = []
 
 
 def parse_model(
@@ -66,6 +70,9 @@ def parse_model(
             "Install it or load from a pre-saved IR JSON with load_ir()."
         )
 
+    if isinstance(model_or_path, (str, Path)) and not Path(model_or_path).exists():
+        raise FileNotFoundError(f"Model file not found: {model_or_path}")
+
     if ops_file is not None:
         load_ops_file(ops_file)
 
@@ -77,12 +84,24 @@ def parse_model(
             name = type(model_or_path).__name__
 
     walker = TorchScriptWalker(custom_op_registry=custom_op_registry)
-    graph = walker.walk(model_or_path, model_name=name)
+    try:
+        graph = walker.walk(model_or_path, model_name=name)
+    except RuntimeError as e:
+        msg = str(e)
+        if "Unknown builtin op" in msg:
+            op = msg.split("Unknown builtin op:")[-1].split(".")[0].strip()
+            raise RuntimeError(
+                f"Unknown custom op '{op}' — register it first with --ops <file>.py"
+            ) from None
+        raise
+
     logger.info("Parsed '%s': %d nodes, %d custom ops.", graph.name, len(graph.nodes), len(graph.custom_ops))
     return graph
 
 
 def load_ir(path: str | Path) -> IRGraph:
+    if not Path(path).exists():
+        raise FileNotFoundError(f"IR file not found: {path}")
     graph = IRSerializer.load(path)
     logger.info("Loaded IR '%s' from %s", graph.name, path)
     return graph
@@ -142,7 +161,12 @@ def inspect_model(graph: IRGraph) -> Dict[str, Any]:
 
 
 def _cmd_parse(args: argparse.Namespace) -> None:
-    graph = parse_model(args.model, model_name=args.name, ops_file=args.ops)
+    try:
+        graph = parse_model(args.model, model_name=args.name, ops_file=args.ops)
+    except FileNotFoundError as e:
+        _die(str(e))
+    except RuntimeError as e:
+        _die(str(e))
     if args.ir:
         save_ir(graph, args.ir)
     if args.output:
@@ -166,20 +190,29 @@ def _cmd_parse(args: argparse.Namespace) -> None:
 
 
 def _cmd_dump(args: argparse.Namespace) -> None:
-    graph = parse_model(args.model, model_name=args.name, ops_file=args.ops)
+    try:
+        graph = parse_model(args.model, model_name=args.name, ops_file=args.ops)
+    except (FileNotFoundError, RuntimeError) as e:
+        _die(str(e))
     save_ir(graph, args.ir)
 
 
 def _cmd_inspect(args: argparse.Namespace) -> None:
-    if args.model:
-        graph = parse_model(args.model, model_name=args.name, ops_file=getattr(args, "ops", None))
-    else:
-        graph = load_ir(args.ir)
+    try:
+        if args.model:
+            graph = parse_model(args.model, model_name=args.name, ops_file=getattr(args, "ops", None))
+        else:
+            graph = load_ir(args.ir)
+    except (FileNotFoundError, RuntimeError) as e:
+        _die(str(e))
     print(json.dumps(inspect_model(graph), indent=2))
 
 
 def _cmd_codegen(args: argparse.Namespace) -> None:
-    graph = load_ir(args.ir)
+    try:
+        graph = load_ir(args.ir)
+    except (FileNotFoundError, RuntimeError) as e:
+        _die(str(e))
     header = generate_header(
         graph,
         namespace=args.namespace,
